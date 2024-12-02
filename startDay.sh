@@ -7,4 +7,5 @@ source .env
 
 mkdir $day && cd $day
 curl "https://adventofcode.com/2024/day/$dayNoZero/input" -H "cookie: session=$COOKIE_SESSION" -o input.txt
+touch p1.sh p2.sh && chmod +x *.sh
 nvim p1.sh p2.sh input.txt test.txt

@@ -7,5 +7,5 @@ if [[ ! -d $day ]];then
 fi
 
 cd $day
-hyperfine --warmup 5 -n "$day - P1" './p1.py input.txt'
-hyperfine --warmup 5 -n "$day - P2" './p2.py input.txt'
+hyperfine --warmup 5 -n "$day - P1" './p1.sh input.txt'
+hyperfine --warmup 5 -n "$day - P2" './p2.sh input.txt'

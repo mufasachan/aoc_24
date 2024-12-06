@@ -23,6 +23,7 @@ get_line() {
 
 	echo "$line"
 }
+
 file_path=$1
 
 # IFS=$'\n' read -ra map < "$file_path"
@@ -86,95 +87,127 @@ done
 # manage last line
 lines+=("$(get_line "$row_direction $col_direction" $row_guard $col_guard $row_last $col_last)")
 
-score=0
-for ((i = 3; i < ${#lines[@]}; i++)); do
-	read -r x_current y1_current y2_current <<<"${lines[i]}"
-	# + 1 because next directions, / 4 to count the number of turns
-	((i_others_max = (i + 1) / 4))
+declare -A positions_deviation
+declare -A lines_with_loop
+for ((i = ${#lines[@]} - 1; i >= 0; i--)); do
+	# 0: Upward, 1: Right, 2: Downward, 3: Left
+	((direction_current = i % 4))
+	line="${lines[i]}"
+	read -r x_current y1_current y2_current <<<"$line"
 
-	for ((i_other = 0; i_other < i_others_max; i_other++)); do
-		((i_other_line = (i_other * 4) + ((i + 1) % 4)))
-		read -r x_previous y1_previous y2_previous <<<"${lines[i_other_line]}"
+	# Test other line that might a target line for deviation that loops
+	for ((i_other = i; i_other >= 0; i_other--)); do
+		((direction_other = i_other % 4))
+		# Do not test the line with itself
+		# Test only line with compatible direction
+		((i == i_other || ((direction_current + 1) % 4) != direction_other)) && continue
 
-		# Line is in a possible position
-		((y2_current < x_previous || y1_current > x_previous)) && continue
+		line_other="${lines[i_other]}"
+		read -r x_other y1_other y2_other <<<"$line_other"
+
+		# The future line is interesting only if it loops,
+		# else they are just a fast-forward to the end.
+		if ((i_other > i)); then
+			[[ ! -v ${lines_with_loop["$line_other"]} ]] && continue
+		fi
+
+		# the other line is not reachable by a turn
+		((y2_current < x_other || y1_current > x_other)) && continue
 
 		# Check that it is in correct side
-		((i_direction = i % 4))
-		if ((i_direction < 2)); then
+		if ((direction_current < 2)); then
 			# up and right
-			((x_current > y2_previous)) && continue
+			((x_current > y2_other)) && continue
 		else
 			# down and left
-			((x_current < y1_previous)) && continue
+			((x_current < y1_other)) && continue
 		fi
 
 		# If the lines cross each other (Easy case)
-		if ((y1_previous <= x_current && x_current <= y2_previous)); then
-			((score++))
+		if ((y1_other <= x_current && x_current <= y2_other)); then
+			case $direction_current in
+			0)
+				positions_deviation["$((x_other - 1)) $x_current"]=1
+				;;
+			1)
+				positions_deviation["$x_current $((x_other + 1))"]=1
+				;;
+			2)
+				positions_deviation["$((x_other + 1)) $x_current"]=1
+				;;
+			3)
+				positions_deviation["$x_current $((x_other - 1))"]=1
+				;;
+			esac
+			lines_with_loop["$line"]=1
 			continue
 		fi
 
-		((no_obstacle=1))
-		((test=1))
-		case $i_direction in
-		0)  # Upward
+		((no_obstacle = 1))
+		case $direction_current in
+		0) # Upward
 			for obstacle_position in "${!obstacle_positions[@]}"; do
 				read -r row_obstacle col_obstacle <<<"$obstacle_position"
-				((x_previous != row_obstacle)) && continue
-				if ((col_obstacle > x_current && col_obstacle < y1_previous)); then
+				((x_other != row_obstacle)) && continue
+				if ((col_obstacle > x_current && col_obstacle < y1_other)); then
 					no_obstacle=0
-					# if obstacle 
+					# if obstacle
 					break
 				fi
 			done
-			((test--))
+			if ((no_obstacle == 1)); then
+				positions_deviation["$((x_other - 1)) $x_current"]=1
+				lines_with_loop["$line"]=1
+			fi
 			;;
-		1)  # to the right
+		1) # to the right
 			for obstacle_position in "${!obstacle_positions[@]}"; do
 				read -r row_obstacle col_obstacle <<<"$obstacle_position"
-				((x_previous != col_obstacle)) && continue
-				if ((row_obstacle > x_current && row_obstacle < y1_previous)); then
+				((x_other != col_obstacle)) && continue
+				if ((row_obstacle > x_current && row_obstacle < y1_other)); then
 					no_obstacle=0
 					break
 				fi
 			done
-			((test--))
+			if ((no_obstacle == 1)); then
+				positions_deviation["$x_current $((x_other + 1))"]=1
+				lines_with_loop["$line"]=1
+			fi
 			;;
-		2)  # downward
+		2) # downward
 			for obstacle_position in "${!obstacle_positions[@]}"; do
 				read -r row_obstacle col_obstacle <<<"$obstacle_position"
-				((x_previous != row_obstacle)) && continue
-				if ((col_obstacle > y2_previous && col_obstacle < x_current)); then
+				((x_other != row_obstacle)) && continue
+				if ((col_obstacle > y2_other && col_obstacle < x_current)); then
 					no_obstacle=0
 					break
 				fi
 			done
-			((test--))
+			if ((no_obstacle == 1)); then
+				positions_deviation["$((x_other + 1)) $x_current"]=1
+				lines_with_loop["$line"]=1
+			fi
 			;;
-		3)  # to the left
+		3) # to the left
 			for obstacle_position in "${!obstacle_positions[@]}"; do
 				read -r row_obstacle col_obstacle <<<"$obstacle_position"
-				((x_previous != col_obstacle)) && continue
-				if ((row_obstacle > y2_previous && row_obstacle < x_current)); then
+				((x_other != col_obstacle)) && continue
+				if ((row_obstacle > y2_other && row_obstacle < x_current)); then
 					no_obstacle=0
 					break
 				fi
 			done
-			((test--))
+			if ((no_obstacle == 1)); then
+				positions_deviation["$x_current $((x_other - 1))"]=1
+				lines_with_loop["$line"]=1
+			fi
 			;;
 		esac
-
-		if ((no_obstacle == 1)); then 
-			((score++))
-			continue
-		fi
 
 		# Maybe the obstacle leads to another path?
 		# but this time we cannot block anymore the guard path
 		# So compute the new path and maybe it will join a previous line.
-
 	done
 done
 
-echo $score
+echo "${#positions_deviation[@]}"

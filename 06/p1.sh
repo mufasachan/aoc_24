@@ -5,13 +5,7 @@ n_rows=${#map[@]}
 n_cols=${#map[0]}
 
 declare -A obstacle_positions=()
-
-declare -r BOT_TO_TOP="-1 0"
-declare -r LEFT_TO_RIGHT="0 1"
-declare -r TOP_TO_BOT="1 0"
-declare -r RIGHT_TO_LEFT="0 -1"
-declare -a directions=("$BOT_TO_TOP" "$LEFT_TO_RIGHT" "$TOP_TO_BOT" "$RIGHT_TO_LEFT")
-
+declare -i row_guard col_guard
 for ((i_row = 0; i_row < n_rows; i_row++)); do
 	row="${map[i_row]}"
 	for ((i_col = 0; i_col < n_cols; i_col++)); do
@@ -20,33 +14,85 @@ for ((i_row = 0; i_row < n_rows; i_row++)); do
 		if [[ "$element" == "^" ]]; then
 			row_guard=$i_row
 			col_guard=$i_col
-			row_direction=-1
-			col_direction=0
 		fi
 	done
 done
 
+direction=0
 declare -A visited_cases=(["$row_guard $col_guard"]=1)
-row_front=$((row_guard + row_direction))
-col_front=$((col_guard + col_direction))
-i_direction=0
+case "$direction" in
+"0")
+	((row_front = row_guard - 1))
+	((col_front = col_guard))
+	;;
+"1")
+	((row_front = row_guard))
+	((col_front = col_guard + 1))
+	;;
+"2")
+	((row_front = row_guard + 1))
+	((col_front = col_guard))
+	;;
+"3")
+	((row_front = row_guard))
+	((col_front = col_guard - 1))
+	;;
+esac
+
 while true; do
-	((row_guard += row_direction))
-	((col_guard += col_direction))
-	((row_front += row_direction))
-	((col_front += col_direction))
+	# out next step?
+	if ((row_front < 0 || row_front >= n_rows || col_front < 0 || col_front >= n_cols)); then
+		break
+	fi
 
-	# out?
-	((row_guard < 0 || row_guard >= n_rows || col_guard < 0 || col_guard >= n_cols)) && break
+	# Is there an obstacle?
+	if [[ -v ${obstacle_positions["$row_front $col_front"]} ]]; then
+		# Change direction
+		((direction = (direction + 1) % 4))
+		# Update the new front based on the new direction
+		case "$direction" in
+		"0")
+			((row_front = row_guard - 1))
+			((col_front = col_guard))
+			;;
+		"1")
+			((row_front = row_guard))
+			((col_front = col_guard + 1))
+			;;
+		"2")
+			((row_front = row_guard + 1))
+			((col_front = col_guard))
+			;;
+		"3")
+			((row_front = row_guard))
+			((col_front = col_guard - 1))
+			;;
+		esac
+	fi
+
+	# Go forward
+	((row_guard = row_front))
+	((col_guard = col_front))
 	visited_cases["$row_guard $col_guard"]=1
-	# do you have an obstacle in front of you?
-	[[ ! -v ${obstacle_positions["$row_front $col_front"]} ]] && continue
-	
-	((i_direction++))
-	read -r row_direction col_direction <<<"${directions[i_direction % 4]}"
 
-	((row_front = row_guard + row_direction))
-	((col_front = col_guard + col_direction))
+	case "$direction" in
+	"0")
+		((row_front = row_guard - 1))
+		((col_front = col_guard))
+		;;
+	"1")
+		((row_front = row_guard))
+		((col_front = col_guard + 1))
+		;;
+	"2")
+		((row_front = row_guard + 1))
+		((col_front = col_guard))
+		;;
+	"3")
+		((row_front = row_guard))
+		((col_front = col_guard - 1))
+		;;
+	esac
 done
 
 echo "${#visited_cases[@]}"
